@@ -42,6 +42,7 @@
   .log { font-size: 13px; color: #bcd; line-height: 1.6; margin-top: 12px; white-space: pre-wrap; }
   .msg { min-height: 24px; color: #f0d070; font-size: 15px; }
   .help { font-size: 13px; color: #9ab; line-height: 1.6; margin-top: 16px; }
+  .rule.drop { cursor: pointer; outline: 2px dashed #c66; }
   #pickBox { background: #2c3a32; border-radius: 10px; padding: 10px; margin: 8px 0; }
 </style>
 </head>
@@ -51,8 +52,9 @@
   <div class="sub" id="sub"></div>
   <div class="line" id="lineTxt"></div>
   <div id="pickBox" style="display:none">
-    <div class="info">挑一张规矩牌，挑了就一直留着：</div>
+    <div class="info" id="pickTxt">挑一张规矩牌，挑了就一直留着：</div>
     <div class="rules" id="offer"></div>
+    <div class="row"><button class="ghost" id="bSkip">都不要</button></div>
   </div>
   <div class="info">手上的规矩：</div>
   <div class="rules" id="rules"></div>
@@ -61,11 +63,11 @@
   <div class="info">手里</div>
   <div class="hand" id="hand"></div>
   <div class="row">
-    <button class="draw" id="bDraw">摸两颗看</button>
+    <button class="draw" id="bDraw">摸两颗看</button><span class="info" id="lookTxt"></span>
     <button class="stop" id="bStop">停</button>
     <span class="info">现在停能拿 <span class="big" id="now">0</span> 分</span>
   </div>
-  <div id="showBox" style="display:none"><div class="info">摸出两颗，留一颗（另一颗这一局扔掉）：</div><div class="row"><div class="hand" id="show"></div><button class="ghost" id="bToss">两颗都扔</button><span class="info" id="tossTxt"></span></div></div>
+  <div id="showBox" style="display:none"><div class="info">摸出两颗，留一颗（另一颗这一局扔掉）：</div><div class="row"><div class="hand" id="show"></div><button class="ghost" id="bToss">两颗都不要</button><span class="info" id="tossTxt"></span></div></div>
   <div class="row" id="moonRow" style="display:none">
     <span class="info">摸到红的。用月亮把它改成黑的？</span>
     <button class="moon" id="bMoon">用</button>
@@ -79,9 +81,9 @@
   <div class="help">
     袋子里 16 颗石子：黑、红各 1 到 4，每样两颗。每局重新装满。<br>
     每回从袋子里摸出两颗，留一颗，另一颗这一局扔掉。什么时候停你定。分数是手里黑的点数加起来，再照手上的规矩牌加、乘（先加后乘）。<br>
-    每局开头挑一张规矩牌，一直留着。每局有一条线，停下来的分数够线才能往下走，不够就结束。<br>
-    每局有两回可以把摸出的两颗都扔掉。<br>
-    月亮开头一颗：刚留下红的时候，可以把它改成黑的。哪一局的分数比线多一半，多给一颗月亮。
+    每局开头给两张规矩牌，挑一张留在手上，手上最多 4 张；满了想要新的就得扔一张，也可以都不要。每局有一条线，停下来的分数够线才能往下走，不够就结束。<br>
+    每局只能摸 5 回。两颗都不要也行，这一回就算用掉了。<br>
+    月亮开头一颗：刚留下红的时候，可以把它改成黑的。哪一局的分数到了线的两倍，多给一颗月亮。
   </div>
 </div>
 <script>
@@ -89,18 +91,19 @@ const NUMS = [1, 2, 3, 4];
 const BAG = [];
 for (const c of ['黑', '红']) for (const n of NUMS) for (let k = 0; k < 2; k++) BAG.push({ c, n });
 const N = BAG.length, BUST = 7;
-const LINES = [8, 12, 18, 26, 38, 56, 85, 130];
-const TOSS = 2;
+const LINES = [10, 20, 34, 52, 76, 104, 136, 170];
+const LOOK = 5, SLOTS = 4;
 const RULES = {
-  '黑板': { d: '停的时候手里全是黑的，×3', f: (b, r) => [0, (r.length === 0 && b.length) ? 3 : 1] },
-  '满八': { d: '摸满 8 颗，+12', f: (b, r) => [(b.length + r.length >= 8) ? 12 : 0, 1] },
-  '正七': { d: '红的加起来正好 7，×2', f: (b, r) => [0, sum(r) === 7 ? 2 : 1] },
-  '顺':   { d: '黑的 1 2 3 4 都有，+10', f: (b, r) => [[1, 2, 3, 4].every(v => b.includes(v)) ? 10 : 0, 1] },
-  '贪':   { d: '红的点数也算分', f: (b, r) => [sum(r), 1] },
-  '稳':   { d: '摸到的点数加起来不过 12，×2', f: (b, r) => [0, sum(b) + sum(r) <= 12 ? 2 : 1] },
-  '凑对': { d: '黑的里每有一对同点数，+5', f: (b, r) => [5 * NUMS.filter(v => b.filter(x => x === v).length >= 2).length, 1] },
-  '长':   { d: '摸了几颗，加几分', f: (b, r) => [b.length + r.length, 1] },
-  '少':   { d: '只摸了 3 颗以内就停，×2', f: (b, r) => [0, (b.length + r.length) <= 3 ? 2 : 1] },
+  '黑板': { d: '手里全是黑的，×3', f: (b, r) => [0, (r.length === 0 && b.length) ? 3 : 1] },
+  '满手': { d: '手里有 5 颗（五回都留了），×3', f: (b, r) => [0, (b.length + r.length >= 5) ? 3 : 1] },
+  '单':   { d: '手里黑的点数没有重样的，×2', f: (b, r) => [0, (b.length && new Set(b).size === b.length) ? 2 : 1] },
+  '正七': { d: '手里红的加起来正好 7，×3', f: (b, r) => [0, sum(r) === 7 ? 3 : 1] },
+  '顺':   { d: '手里黑的 1 2 3 4 都有，+10', f: (b, r) => [[1, 2, 3, 4].every(v => b.includes(v)) ? 10 : 0, 1] },
+  '贪':   { d: '手里红的点数也算分', f: (b, r) => [sum(r), 1] },
+  '稳':   { d: '手里点数加起来不过 10，×2', f: (b, r) => [0, sum(b) + sum(r) <= 10 ? 2 : 1] },
+  '凑对': { d: '手里黑的每有一对同点数，+5', f: (b, r) => [5 * NUMS.filter(v => b.filter(x => x === v).length >= 2).length, 1] },
+  '长':   { d: '手里每有一颗，+2', f: (b, r) => [2 * (b.length + r.length), 1] },
+  '少':   { d: '手里只有 1、2 颗，+12', f: (b, r) => [(b.length + r.length) <= 2 ? 12 : 0, 1] },
 };
 const KEYS = Object.keys(RULES);
 function sum(a) { return a.reduce((x, y) => x + y, 0); }
@@ -111,10 +114,10 @@ function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 let round = 0, order = [], k = 0, hand = [], moons = 1, total = 0, pending = null, over = false, log = [];
-let held = [], offer = [], showing = [], gone = new Set(), toss = TOSS;
+let held = [], offer = [], showing = [], gone = new Set(), looks = LOOK, swapIn = null;
 
 function startRound() {
-  order = shuffle([...Array(N).keys()]); k = 0; hand = []; pending = null; showing = []; gone = new Set(); toss = TOSS;
+  order = shuffle([...Array(N).keys()]); k = 0; hand = []; pending = null; showing = []; gone = new Set(); looks = LOOK;
   const left = KEYS.filter(x => !held.includes(x));
   offer = left.length ? shuffle(left).slice(0, 2) : [];
 }
@@ -138,12 +141,15 @@ function render() {
   const [b, r] = split();
   $('pickBox').style.display = (!over && offer.length) ? 'block' : 'none';
   $('offer').innerHTML = offer.map(key => `<div class="rule pick" data-k="${key}"><b>${key}</b>${RULES[key].d}</div>`).join('');
+  $('pickTxt').textContent = swapIn ? `手上满了（最多 ${SLOTS} 张）。点手上一张换成「${swapIn}」，或者点"都不要"：`
+    : held.length >= SLOTS ? `挑一张换掉手上的一张（手上最多 ${SLOTS} 张），也可以都不要：` : `挑一张规矩牌，留在手上（最多 ${SLOTS} 张），也可以都不要：`;
   for (const el of document.querySelectorAll ? document.querySelectorAll('.rule.pick') : []) el.onclick = () => pick(el.dataset.k);
   $('rules').innerHTML = held.map(key => {
     const [a, m] = hand.length ? RULES[key].f(b, r) : [0, 1];
     const on = (a > 0 || m > 1) && sum(r) <= BUST;
-    return `<div class="rule ${on ? 'on' : ''}"><b>${key}</b>${RULES[key].d}</div>`;
+    return `<div class="rule ${on ? 'on' : ''} ${swapIn ? 'drop' : ''}" data-k="${key}"><b>${key}</b>${RULES[key].d}</div>`;
   }).join('') || '<span class="info" style="color:#678">（还没有）</span>';
+  for (const el of document.querySelectorAll ? document.querySelectorAll('.rule.drop') : []) el.onclick = () => drop(el.dataset.k);
   const rs = sum(r);
   $('redbar').style.width = Math.min(100, rs / 8 * 100) + '%';
   $('redtxt').textContent = `红的合计 ${rs} / 7`;
@@ -155,24 +161,31 @@ function render() {
   $('showBox').style.display = showing.length ? 'block' : 'none';
   $('show').innerHTML = showing.map(i => `<div class="st ${BAG[i].c} pickme" data-i="${i}">${BAG[i].n}</div>`).join('');
   for (const el of document.querySelectorAll ? document.querySelectorAll('.st.pickme') : []) el.onclick = () => keep(+el.dataset.i);
-  $('bToss').disabled = toss <= 0 || showing.length < 2;
-  $('tossTxt').textContent = `这一局还能扔 ${toss} 回`;
+  $('bToss').disabled = showing.length < 2;
+  $('tossTxt').textContent = '';
+  $('lookTxt').textContent = over ? '' : ` 还能摸 ${looks} 回`;
   $('moonRow').style.display = pending !== null ? 'flex' : 'none';
   const busy = over || pending !== null || offer.length > 0 || showing.length > 0;
-  $('bDraw').disabled = busy || k >= N;
+  $('bDraw').disabled = busy || k >= N || looks <= 0;
   $('bStop').disabled = busy || hand.length === 0;
   $('log').textContent = log.join('\n');
 }
 function pick(key) {
   if (!offer.includes(key)) return;
+  if (held.length >= SLOTS) { swapIn = key; render(); return; }
   held.push(key); offer = []; $('msg').textContent = ''; render();
 }
+function drop(key) {
+  if (!swapIn || !held.includes(key)) return;
+  held[held.indexOf(key)] = swapIn; swapIn = null; offer = []; $('msg').textContent = `扔了「${key}」`; render();
+}
+$('bSkip').onclick = () => { if (!offer.length) return; offer = []; swapIn = null; $('msg').textContent = ''; render(); };
 function endRound(pts, why) {
   const line = LINES[round];
   log.push(`第 ${round + 1} 局（线 ${line}）：${why}，${pts} 分${pts >= line ? '' : '，不够线'}`);
   if (pts < line) { over = true; $('msg').textContent = `没够线，结束。过了 ${round} 局。刷新再来一场；同一场：网址后面加 ?seed=${startSeed}`; render(); return; }
   let extra = '';
-  if (pts * 2 >= 3 * line) { moons++; extra = '，超过线一半，多一颗月亮'; }
+  if (pts >= 2 * line) { moons++; extra = '，到了线的两倍，多一颗月亮'; }
   round++;
   if (round >= LINES.length) { over = true; $('msg').textContent = `八局全过了！`; render(); return; }
   $('msg').textContent = `过了，${pts} 分${extra}`;
@@ -184,16 +197,16 @@ function checkBust() {
   return false;
 }
 $('bDraw').onclick = () => {
-  if (over || pending !== null || offer.length || showing.length || k >= N) return;
-  showing = order.slice(k, k + 2); k += showing.length;
+  if (over || pending !== null || offer.length || showing.length || k >= N || looks <= 0) return;
+  showing = order.slice(k, k + 2); k += showing.length; looks--;
   $('msg').textContent = '';
   if (showing.length === 1) { keep(showing[0]); return; }
   render();
 };
 $('bToss').onclick = () => {
-  if (showing.length < 2 || toss <= 0) return;
+  if (showing.length < 2) return;
   for (const j of showing) gone.add(j);
-  showing = []; toss--; $('msg').textContent = '两颗都扔了'; render();
+  showing = []; $('msg').textContent = '两颗都不要'; render();
 };
 function keep(i) {
   if (!showing.includes(i)) return;
