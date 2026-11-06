@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>两张牌</title>
+<style>
+  body { font-family: -apple-system, "PingFang SC", sans-serif; background: #1f2a24; color: #eee; margin: 0; padding: 16px; }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  h1 { font-size: 20px; margin: 4px 0 2px; }
+  .sub { color: #9ab; font-size: 14px; margin-bottom: 8px; }
+  .line { font-size: 16px; margin: 4px 0 8px; }
+  .line b { color: #f0b030; font-size: 20px; }
+  .rules { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+  .rule { flex: 1 1 140px; background: #f3ead2; color: #222; border-radius: 10px; padding: 8px 10px; min-height: 52px; font-size: 14px; }
+  .rule b { display: block; font-size: 17px; margin-bottom: 2px; }
+  .rule.on { outline: 3px solid #f0b030; }
+  .rule.pick { cursor: pointer; background: #fff7dc; }
+  .rule.pick:hover { outline: 3px solid #3a7; }
+  .bar { height: 22px; background: #333; border-radius: 6px; position: relative; overflow: hidden; margin: 6px 0; }
+  .bar i { position: absolute; left: 0; top: 0; bottom: 0; background: #d24; transition: width .2s; }
+  .bar span { position: absolute; left: 8px; top: 2px; font-size: 13px; }
+  .hand, .bag { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 10px; min-height: 40px; }
+  .st { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 17px; }
+  .st.黑 { background: #111; color: #eee; border: 2px solid #555; }
+  .st.红 { background: #c22; color: #fff; border: 2px solid #f66; }
+  .st.月 { background: #111; color: #f0d070; border: 2px solid #f0d070; }
+  .st.out { opacity: .18; }
+  .st.pickme { cursor: pointer; width: 48px; height: 48px; font-size: 22px; }
+  .st.pickme:hover { outline: 3px solid #3a7; }
+  .st.gone { opacity: .18; text-decoration: line-through; border-style: dashed; }
+  .st.small { width: 26px; height: 26px; font-size: 13px; }
+  .row { display: flex; gap: 10px; align-items: center; margin: 10px 0; flex-wrap: wrap; }
+  button { font-size: 17px; padding: 10px 18px; border-radius: 8px; border: 0; cursor: pointer; }
+  button:disabled { opacity: .35; cursor: default; }
+  .draw { background: #3a7; color: #fff; }
+  .stop { background: #c63; color: #fff; }
+  .moon { background: #f0d070; color: #222; }
+  .ghost { background: #444; color: #ddd; }
+  .info { font-size: 15px; line-height: 1.6; }
+  .big { font-size: 22px; font-weight: bold; }
+  .log { font-size: 13px; color: #bcd; line-height: 1.6; margin-top: 12px; white-space: pre-wrap; }
+  .msg { min-height: 24px; color: #f0d070; font-size: 15px; }
+  .help { font-size: 13px; color: #9ab; line-height: 1.6; margin-top: 16px; }
+  #pickBox { background: #2c3a32; border-radius: 10px; padding: 10px; margin: 8px 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>两张牌</h1>
+  <div class="sub" id="sub"></div>
+  <div class="line" id="lineTxt"></div>
+  <div id="pickBox" style="display:none">
+    <div class="info">挑一张规矩牌，挑了就一直留着：</div>
+    <div class="rules" id="offer"></div>
+  </div>
+  <div class="info">手上的规矩：</div>
+  <div class="rules" id="rules"></div>
+  <div class="info">红的加起来过 <b>7</b> 就爆，这一局 0 分。</div>
+  <div class="bar"><i id="redbar"></i><span id="redtxt"></span></div>
+  <div class="info">手里</div>
+  <div class="hand" id="hand"></div>
+  <div class="row">
+    <button class="draw" id="bDraw">摸两颗看</button>
+    <button class="stop" id="bStop">停</button>
+    <span class="info">现在停能拿 <span class="big" id="now">0</span> 分</span>
+  </div>
+  <div id="showBox" style="display:none"><div class="info">摸出两颗，留一颗（另一颗这一局扔掉）：</div><div class="row"><div class="hand" id="show"></div><button class="ghost" id="bToss">两颗都扔</button><span class="info" id="tossTxt"></span></div></div>
+  <div class="row" id="moonRow" style="display:none">
+    <span class="info">摸到红的。用月亮把它改成黑的？</span>
+    <button class="moon" id="bMoon">用</button>
+    <button class="ghost" id="bNo">不用</button>
+  </div>
+  <div class="msg" id="msg"></div>
+  <div class="info">月亮：<span id="moonTxt"></span></div>
+  <div class="info" style="margin-top:8px">袋子里（灰的是留下的，虚线的是扔掉的）</div>
+  <div class="bag" id="bag"></div>
+  <div class="log" id="log"></div>
+  <div class="help">
+    袋子里 16 颗石子：黑、红各 1 到 4，每样两颗。每局重新装满。<br>
+    每回从袋子里摸出两颗，留一颗，另一颗这一局扔掉。什么时候停你定。分数是手里黑的点数加起来，再照手上的规矩牌加、乘（先加后乘）。<br>
+    每局开头挑一张规矩牌，一直留着。每局有一条线，停下来的分数够线才能往下走，不够就结束。<br>
+    每局有两回可以把摸出的两颗都扔掉。<br>
+    月亮开头一颗：刚留下红的时候，可以把它改成黑的。哪一局的分数比线多一半，多给一颗月亮。
+  </div>
+</div>
+<script>
+const NUMS = [1, 2, 3, 4];
+const BAG = [];
+for (const c of ['黑', '红']) for (const n of NUMS) for (let k = 0; k < 2; k++) BAG.push({ c, n });
+const N = BAG.length, BUST = 7;
+const LINES = [8, 12, 18, 26, 38, 56, 85, 130];
+const TOSS = 2;
+const RULES = {
+  '黑板': { d: '停的时候手里全是黑的，×3', f: (b, r) => [0, (r.length === 0 && b.length) ? 3 : 1] },
+  '满八': { d: '摸满 8 颗，+12', f: (b, r) => [(b.length + r.length >= 8) ? 12 : 0, 1] },
+  '正七': { d: '红的加起来正好 7，×2', f: (b, r) => [0, sum(r) === 7 ? 2 : 1] },
+  '顺':   { d: '黑的 1 2 3 4 都有，+10', f: (b, r) => [[1, 2, 3, 4].every(v => b.includes(v)) ? 10 : 0, 1] },
+  '贪':   { d: '红的点数也算分', f: (b, r) => [sum(r), 1] },
+  '稳':   { d: '摸到的点数加起来不过 12，×2', f: (b, r) => [0, sum(b) + sum(r) <= 12 ? 2 : 1] },
+  '凑对': { d: '黑的里每有一对同点数，+5', f: (b, r) => [5 * NUMS.filter(v => b.filter(x => x === v).length >= 2).length, 1] },
+  '长':   { d: '摸了几颗，加几分', f: (b, r) => [b.length + r.length, 1] },
+  '少':   { d: '只摸了 3 颗以内就停，×2', f: (b, r) => [0, (b.length + r.length) <= 3 ? 2 : 1] },
+};
+const KEYS = Object.keys(RULES);
+function sum(a) { return a.reduce((x, y) => x + y, 0); }
+
+let seed = +(new URLSearchParams(location.search).get('seed') || Math.floor(Math.random() * 1e6));
+const startSeed = seed;
+function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; }
+function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+
+let round = 0, order = [], k = 0, hand = [], moons = 1, total = 0, pending = null, over = false, log = [];
+let held = [], offer = [], showing = [], gone = new Set(), toss = TOSS;
+
+function startRound() {
+  order = shuffle([...Array(N).keys()]); k = 0; hand = []; pending = null; showing = []; gone = new Set(); toss = TOSS;
+  const left = KEYS.filter(x => !held.includes(x));
+  offer = left.length ? shuffle(left).slice(0, 2) : [];
+}
+function split() {
+  const b = [], r = [];
+  for (const h of hand) (h.c === '红' && !h.m ? r : b).push(h.n);
+  return [b, r];
+}
+function score() {
+  const [b, r] = split();
+  if (sum(r) > BUST) return 0;
+  let add = 0, mul = 1;
+  for (const key of held) { const [a, m] = RULES[key].f(b, r); add += a; mul *= m; }
+  return (sum(b) + add) * mul;
+}
+function $(id) { return document.getElementById(id); }
+function stone(h, cls = '') { return `<div class="st ${h.m ? '月' : h.c} ${cls}">${h.n}</div>`; }
+function render() {
+  $('sub').textContent = over ? `结束了，过了 ${round} 局（种子 ${startSeed}）` : `第 ${round + 1} 局（种子 ${startSeed}）`;
+  $('lineTxt').innerHTML = over ? '' : `这一局的线：<b>${LINES[round] ?? '—'}</b> 分`;
+  const [b, r] = split();
+  $('pickBox').style.display = (!over && offer.length) ? 'block' : 'none';
+  $('offer').innerHTML = offer.map(key => `<div class="rule pick" data-k="${key}"><b>${key}</b>${RULES[key].d}</div>`).join('');
+  for (const el of document.querySelectorAll ? document.querySelectorAll('.rule.pick') : []) el.onclick = () => pick(el.dataset.k);
+  $('rules').innerHTML = held.map(key => {
+    const [a, m] = hand.length ? RULES[key].f(b, r) : [0, 1];
+    const on = (a > 0 || m > 1) && sum(r) <= BUST;
+    return `<div class="rule ${on ? 'on' : ''}"><b>${key}</b>${RULES[key].d}</div>`;
+  }).join('') || '<span class="info" style="color:#678">（还没有）</span>';
+  const rs = sum(r);
+  $('redbar').style.width = Math.min(100, rs / 8 * 100) + '%';
+  $('redtxt').textContent = `红的合计 ${rs} / 7`;
+  $('hand').innerHTML = hand.map(h => stone(h)).join('') || '<span class="info" style="color:#678">（还没摸）</span>';
+  $('now').textContent = hand.length ? score() : 0;
+  $('moonTxt').textContent = moons ? `${moons} 颗` : '没有了';
+  const taken = new Set(order.slice(0, k));
+  $('bag').innerHTML = [...Array(N).keys()].map(i => stone(BAG[i], 'small ' + (gone.has(i) ? 'gone' : taken.has(i) && !showing.includes(i) ? 'out' : ''))).join('');
+  $('showBox').style.display = showing.length ? 'block' : 'none';
+  $('show').innerHTML = showing.map(i => `<div class="st ${BAG[i].c} pickme" data-i="${i}">${BAG[i].n}</div>`).join('');
+  for (const el of document.querySelectorAll ? document.querySelectorAll('.st.pickme') : []) el.onclick = () => keep(+el.dataset.i);
+  $('bToss').disabled = toss <= 0 || showing.length < 2;
+  $('tossTxt').textContent = `这一局还能扔 ${toss} 回`;
+  $('moonRow').style.display = pending !== null ? 'flex' : 'none';
+  const busy = over || pending !== null || offer.length > 0 || showing.length > 0;
+  $('bDraw').disabled = busy || k >= N;
+  $('bStop').disabled = busy || hand.length === 0;
+  $('log').textContent = log.join('\n');
+}
+function pick(key) {
+  if (!offer.includes(key)) return;
+  held.push(key); offer = []; $('msg').textContent = ''; render();
+}
+function endRound(pts, why) {
+  const line = LINES[round];
+  log.push(`第 ${round + 1} 局（线 ${line}）：${why}，${pts} 分${pts >= line ? '' : '，不够线'}`);
+  if (pts < line) { over = true; $('msg').textContent = `没够线，结束。过了 ${round} 局。刷新再来一场；同一场：网址后面加 ?seed=${startSeed}`; render(); return; }
+  let extra = '';
+  if (pts * 2 >= 3 * line) { moons++; extra = '，超过线一半，多一颗月亮'; }
+  round++;
+  if (round >= LINES.length) { over = true; $('msg').textContent = `八局全过了！`; render(); return; }
+  $('msg').textContent = `过了，${pts} 分${extra}`;
+  startRound(); render();
+}
+function checkBust() {
+  const [b, r] = split();
+  if (sum(r) > BUST) { endRound(0, `摸了 ${hand.length} 颗，爆了（红的合计 ${sum(r)}）`); return true; }
+  return false;
+}
+$('bDraw').onclick = () => {
+  if (over || pending !== null || offer.length || showing.length || k >= N) return;
+  showing = order.slice(k, k + 2); k += showing.length;
+  $('msg').textContent = '';
+  if (showing.length === 1) { keep(showing[0]); return; }
+  render();
+};
+$('bToss').onclick = () => {
+  if (showing.length < 2 || toss <= 0) return;
+  for (const j of showing) gone.add(j);
+  showing = []; toss--; $('msg').textContent = '两颗都扔了'; render();
+};
+function keep(i) {
+  if (!showing.includes(i)) return;
+  for (const j of showing) if (j !== i) gone.add(j);
+  showing = [];
+  hand.push({ ...BAG[i], m: false });
+  $('msg').textContent = '';
+  if (BAG[i].c === '红' && moons > 0) { pending = hand.length - 1; render(); return; }
+  if (!checkBust()) render();
+};
+$('bMoon').onclick = () => { if (pending === null) return; hand[pending].m = true; moons--; pending = null; $('msg').textContent = '月亮用掉一颗'; render(); };
+$('bNo').onclick = () => { if (pending === null) return; pending = null; if (!checkBust()) render(); };
+$('bStop').onclick = () => { if (over || pending !== null || offer.length || showing.length || !hand.length) return; endRound(score(), `摸了 ${hand.length} 颗停`); };
+startRound(); render();
+</script>
+</body>
+</html>
