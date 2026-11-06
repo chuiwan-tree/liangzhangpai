@@ -82,7 +82,7 @@
     袋子里 16 颗石子：黑、红各 1 到 4，每样两颗。每局重新装满。<br>
     每回从袋子里摸出两颗，留一颗，另一颗这一局扔掉。什么时候停你定。分数是手里黑的点数加起来，再照手上的规矩牌加、乘（先加后乘）。<br>
     每局开头给两张规矩牌，挑一张留在手上，手上最多 4 张；满了想要新的就得扔一张，也可以都不要。每局有一条线，停下来的分数够线才能往下走，不够就结束。<br>
-    每局只能摸 5 回。两颗都不要也行，这一回就算用掉了。<br>
+    每局只能摸 5 回。每局有一回可以两颗都不要（这一回也算摸过了）。<br>
     月亮开头一颗：刚留下红的时候，可以把它改成黑的。哪一局的分数到了线的两倍，多给一颗月亮。
   </div>
 </div>
@@ -91,11 +91,11 @@ const NUMS = [1, 2, 3, 4];
 const BAG = [];
 for (const c of ['黑', '红']) for (const n of NUMS) for (let k = 0; k < 2; k++) BAG.push({ c, n });
 const N = BAG.length, BUST = 7;
-const LINES = [10, 20, 34, 52, 76, 104, 136, 170];
-const LOOK = 5, SLOTS = 4;
+const LINES = [14, 24, 34, 52, 76, 104, 136, 170];
+const LOOK = 5, SLOTS = 4, TOSS = 1;
 const RULES = {
   '黑板': { d: '手里全是黑的，×3', f: (b, r) => [0, (r.length === 0 && b.length) ? 3 : 1] },
-  '满手': { d: '手里有 5 颗（五回都留了），×3', f: (b, r) => [0, (b.length + r.length >= 5) ? 3 : 1] },
+  '满手': { d: '手里有 5 颗，红的黑的都有，×3', f: (b, r) => [0, (b.length + r.length >= 5 && b.length && r.length) ? 3 : 1] },
   '单':   { d: '手里黑的点数没有重样的，×2', f: (b, r) => [0, (b.length && new Set(b).size === b.length) ? 2 : 1] },
   '正七': { d: '手里红的加起来正好 7，×3', f: (b, r) => [0, sum(r) === 7 ? 3 : 1] },
   '顺':   { d: '手里黑的 1 2 3 4 都有，+10', f: (b, r) => [[1, 2, 3, 4].every(v => b.includes(v)) ? 10 : 0, 1] },
@@ -114,10 +114,10 @@ function rnd() { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 
 function shuffle(a) { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 let round = 0, order = [], k = 0, hand = [], moons = 1, total = 0, pending = null, over = false, log = [];
-let held = [], offer = [], showing = [], gone = new Set(), looks = LOOK, swapIn = null;
+let held = [], offer = [], showing = [], gone = new Set(), looks = LOOK, swapIn = null, tosses = TOSS;
 
 function startRound() {
-  order = shuffle([...Array(N).keys()]); k = 0; hand = []; pending = null; showing = []; gone = new Set(); looks = LOOK;
+  order = shuffle([...Array(N).keys()]); k = 0; hand = []; pending = null; showing = []; gone = new Set(); looks = LOOK; tosses = TOSS;
   const left = KEYS.filter(x => !held.includes(x));
   offer = left.length ? shuffle(left).slice(0, 2) : [];
 }
@@ -162,7 +162,8 @@ function render() {
   $('show').innerHTML = showing.map(i => `<div class="st ${BAG[i].c} pickme" data-i="${i}">${BAG[i].n}</div>`).join('');
   for (const el of document.querySelectorAll ? document.querySelectorAll('.st.pickme') : []) el.onclick = () => keep(+el.dataset.i);
   $('bToss').disabled = showing.length < 2;
-  $('tossTxt').textContent = '';
+  $('tossTxt').textContent = tosses > 0 ? `（这一局还能用 ${tosses} 回）` : '（这一局用过了）';
+  $('bToss').disabled = tosses <= 0;
   $('lookTxt').textContent = over ? '' : ` 还能摸 ${looks} 回`;
   $('moonRow').style.display = pending !== null ? 'flex' : 'none';
   const busy = over || pending !== null || offer.length > 0 || showing.length > 0;
@@ -204,7 +205,8 @@ $('bDraw').onclick = () => {
   render();
 };
 $('bToss').onclick = () => {
-  if (showing.length < 2) return;
+  if (showing.length < 2 || tosses <= 0) return;
+  tosses--;
   for (const j of showing) gone.add(j);
   showing = []; $('msg').textContent = '两颗都不要'; render();
 };
